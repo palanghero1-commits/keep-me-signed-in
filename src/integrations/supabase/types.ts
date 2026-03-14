@@ -14,7 +14,90 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      duties: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      duty_assignments: {
+        Row: {
+          assigned_date: string
+          created_at: string
+          duty_id: string
+          id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          assigned_date?: string
+          created_at?: string
+          duty_id: string
+          id?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          assigned_date?: string
+          created_at?: string
+          duty_id?: string
+          id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "duty_assignments_duty_id_fkey"
+            columns: ["duty_id"]
+            isOneToOne: false
+            referencedRelation: "duties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "duty_assignments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kitchen_users: {
+        Row: {
+          created_at: string
+          id: string
+          last_seen_at: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_seen_at?: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_seen_at?: string
+          username?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
