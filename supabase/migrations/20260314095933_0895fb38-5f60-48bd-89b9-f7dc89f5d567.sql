@@ -21,8 +21,16 @@ CREATE TABLE public.duty_assignments (
   duty_id UUID NOT NULL REFERENCES public.duties(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES public.kitchen_users(id) ON DELETE CASCADE,
   assigned_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  start_time TIME,
+  end_time TIME,
+  alarm_enabled BOOLEAN NOT NULL DEFAULT true,
   status TEXT NOT NULL DEFAULT 'pending',
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+  CONSTRAINT duty_assignments_time_range_check CHECK (
+    start_time IS NULL
+    OR end_time IS NULL
+    OR end_time > start_time
+  )
 );
 
 -- Enable RLS

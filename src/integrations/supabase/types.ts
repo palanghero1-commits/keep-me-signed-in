@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_users: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       duties: {
         Row: {
           created_at: string
@@ -37,26 +55,35 @@ export type Database = {
       }
       duty_assignments: {
         Row: {
+          alarm_enabled: boolean
           assigned_date: string
           created_at: string
           duty_id: string
+          end_time: string | null
           id: string
+          start_time: string | null
           status: string
           user_id: string
         }
         Insert: {
+          alarm_enabled?: boolean
           assigned_date?: string
           created_at?: string
           duty_id: string
+          end_time?: string | null
           id?: string
+          start_time?: string | null
           status?: string
           user_id: string
         }
         Update: {
+          alarm_enabled?: boolean
           assigned_date?: string
           created_at?: string
           duty_id?: string
+          end_time?: string | null
           id?: string
+          start_time?: string | null
           status?: string
           user_id?: string
         }
@@ -98,12 +125,180 @@ export type Database = {
         }
         Relationships: []
       }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          disabled_at: string | null
+          endpoint: string
+          id: string
+          last_error: string | null
+          p256dh: string
+          updated_at: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          disabled_at?: string | null
+          endpoint: string
+          id?: string
+          last_error?: string | null
+          p256dh: string
+          updated_at?: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          disabled_at?: string | null
+          endpoint?: string
+          id?: string
+          last_error?: string | null
+          p256dh?: string
+          updated_at?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      push_delivery_settings: {
+        Row: {
+          created_at: string
+          id: number
+          project_url: string | null
+          publishable_key: string | null
+          updated_at: string
+          web_push_trigger_token: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          project_url?: string | null
+          publishable_key?: string | null
+          updated_at?: string
+          web_push_trigger_token?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          project_url?: string | null
+          publishable_key?: string | null
+          updated_at?: string
+          web_push_trigger_token?: string | null
+        }
+        Relationships: []
+      }
+      schedule_settings: {
+        Row: {
+          auto_shuffle_enabled: boolean
+          created_at: string
+          default_alarm_enabled: boolean
+          default_end_time: string
+          default_start_time: string
+          default_status: string
+          id: number
+          rotation_user_count: number
+          updated_at: string
+        }
+        Insert: {
+          auto_shuffle_enabled?: boolean
+          created_at?: string
+          default_alarm_enabled?: boolean
+          default_end_time?: string
+          default_start_time?: string
+          default_status?: string
+          id?: number
+          rotation_user_count?: number
+          updated_at?: string
+        }
+        Update: {
+          auto_shuffle_enabled?: boolean
+          created_at?: string
+          default_alarm_enabled?: boolean
+          default_end_time?: string
+          default_start_time?: string
+          default_status?: string
+          id?: number
+          rotation_user_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_notifications: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          notification_type: string
+          push_error: string | null
+          push_sent_at: string | null
+          read_at: string | null
+          title: string
+          user_id: string
+          week_start: string | null
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          notification_type: string
+          push_error?: string | null
+          push_sent_at?: string | null
+          read_at?: string | null
+          title: string
+          user_id: string
+          week_start?: string | null
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          notification_type?: string
+          push_error?: string | null
+          push_sent_at?: string | null
+          read_at?: string | null
+          title?: string
+          user_id?: string
+          week_start?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "kitchen_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_admin: {
+        Args: {
+          check_user_id?: string
+        }
+        Returns: boolean
+      }
+      auto_build_weekly_schedule: {
+        Args: {
+          target_week_start?: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

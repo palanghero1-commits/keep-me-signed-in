@@ -1,13 +1,18 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
+import {
+  clearStoredKitchenUser,
+  readStoredKitchenUser,
+  setAdminSessionPersistence,
+  storeKitchenUser,
+  type StoredKitchenUser,
+} from "@/lib/session-storage";
+import { disableBrowserPushSubscription } from "@/lib/push-notifications";
 
 type UserMode = "user" | "admin";
 
-interface KitchenUser {
-  id: string;
-  username: string;
-}
+type KitchenUser = StoredKitchenUser;
 
 interface AuthState {
   mode: UserMode | null;
@@ -17,53 +22,97 @@ interface AuthState {
 }
 
 interface AuthContextType extends AuthState {
-  loginAsUser: (username: string) => Promise<void>;
-  loginAsAdmin: (email: string, password: string) => Promise<void>;
+  loginAsUser: (username: string, keepSignedIn: boolean) => Promise<void>;
+  loginAsAdmin: (email: string, password: string, keepSignedIn: boolean) => Promise<void>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+const DEFAULT_AUTH_STATE: AuthState = {
+  mode: null,
+  kitchenUser: null,
+  adminSession: null,
+  isLoading: false,
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
-    mode: null,
-    kitchenUser: null,
-    adminSession: null,
+    ...DEFAULT_AUTH_STATE,
     isLoading: true,
   });
 
-  // Restore user session from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem("kitchen_user");
-    if (saved) {
-      try {
-        const user = JSON.parse(saved);
-        setState((s) => ({ ...s, kitchenUser: user, mode: "user", isLoading: false }));
+    let isActive = true;
+
+    const applyState = (nextState: AuthState) => {
+      if (isActive) {
+        setState(nextState);
+      }
+    };
+
+    const verifyAdminSession = async (session: Session) => {
+      const { data, error } = await supabase.rpc("is_admin", {
+        check_user_id: session.user.id,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      return Boolean(data);
+    };
+
+    const syncAuthState = async (session: Session | null) => {
+      if (session) {
+        try {
+          const isAdmin = await verifyAdminSession(session);
+          if (isAdmin) {
+            clearStoredKitchenUser();
+            applyState({
+              mode: "admin",
+              kitchenUser: null,
+              adminSession: session,
+              isLoading: false,
+            });
+            return;
+          }
+        } catch (error) {
+          console.error("Failed to verify admin role", error);
+        }
+
+        await supabase.auth.signOut();
+        applyState(DEFAULT_AUTH_STATE);
         return;
-      } catch {}
-    }
+      }
 
-    // Check for admin session
+      const storedUser = readStoredKitchenUser();
+      if (storedUser) {
+        applyState({
+          mode: "user",
+          kitchenUser: storedUser,
+          adminSession: null,
+          isLoading: false,
+        });
+        return;
+      }
+
+      applyState(DEFAULT_AUTH_STATE);
+    };
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-      if (session) {
-        setState((s) => ({ ...s, adminSession: session, mode: "admin", isLoading: false }));
-      } else {
-        setState((s) => ({ ...s, isLoading: false }));
-      }
+      void syncAuthState(session);
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setState((s) => ({ ...s, adminSession: session, mode: "admin", isLoading: false }));
-      } else {
-        setState((s) => ({ ...s, isLoading: false }));
-      }
-    });
+    void supabase.auth.getSession().then(({ data: { session } }) => syncAuthState(session));
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isActive = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  const loginAsUser = async (username: string) => {
+  const loginAsUser = async (username: string, keepSignedIn: boolean) => {
     const trimmed = username.trim().toLowerCase();
     if (!trimmed) throw new Error("Username required");
 
@@ -91,19 +140,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user = { id: newUser.id, username: newUser.username };
     }
 
-    localStorage.setItem("kitchen_user", JSON.stringify(user));
+    storeKitchenUser(user, keepSignedIn);
     setState({ mode: "user", kitchenUser: user, adminSession: null, isLoading: false });
   };
 
-  const loginAsAdmin = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const loginAsAdmin = async (email: string, password: string, keepSignedIn: boolean) => {
+    setAdminSessionPersistence(keepSignedIn);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+    if (!data.session) throw new Error("Admin session was not created");
+
+    const { data: isAdmin, error: roleError } = await supabase.rpc("is_admin", {
+      check_user_id: data.session.user.id,
+    });
+
+    if (roleError) {
+      await supabase.auth.signOut();
+      throw roleError;
+    }
+
+    if (!isAdmin) {
+      await supabase.auth.signOut();
+      throw new Error("This account does not have admin access");
+    }
+
+    clearStoredKitchenUser();
+    setState({
+      mode: "admin",
+      kitchenUser: null,
+      adminSession: data.session,
+      isLoading: false,
+    });
   };
 
   const logout = () => {
-    localStorage.removeItem("kitchen_user");
-    supabase.auth.signOut();
-    setState({ mode: null, kitchenUser: null, adminSession: null, isLoading: false });
+    void disableBrowserPushSubscription().catch((error) => {
+      console.error("Failed to disable browser push subscription", error);
+    });
+    clearStoredKitchenUser();
+    void supabase.auth.signOut();
+    setState(DEFAULT_AUTH_STATE);
   };
 
   return (
