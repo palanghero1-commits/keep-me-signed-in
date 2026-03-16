@@ -29,6 +29,7 @@ import {
   formatTimeRange,
   formatTimeValue,
   getWeekStart,
+  isAssignmentInWeek,
   parseAssignmentDateTime,
 } from "@/lib/schedule";
 
@@ -142,6 +143,14 @@ export function DutySchedule() {
 
   const mySchedule = useMemo(() => myAssignments.map(toScheduleEntry), [myAssignments]);
   const teamSchedule = useMemo(() => teamAssignments.map(toScheduleEntry), [teamAssignments]);
+  const selectedWeekMySchedule = useMemo(
+    () => mySchedule.filter((assignment) => isAssignmentInWeek(assignment, selectedWeekStart)),
+    [mySchedule, selectedWeekStart],
+  );
+  const selectedWeekTeamSchedule = useMemo(
+    () => teamSchedule.filter((assignment) => isAssignmentInWeek(assignment, selectedWeekStart)),
+    [selectedWeekStart, teamSchedule],
+  );
   const startAlarmSound = () => {
     const AudioCtx = window.AudioContext ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtx) return () => undefined;
@@ -560,22 +569,31 @@ export function DutySchedule() {
           </div>
         </section>
 
-        <Tabs defaultValue="my-week" className="space-y-4">
+        <Tabs defaultValue="published-week" className="space-y-4">
           <TabsList className="h-auto flex-wrap justify-start gap-2 rounded-2xl bg-transparent p-0">
-            <TabsTrigger value="my-week" className="rounded-full border border-border/70 bg-card px-4 py-2">
-              My week
+            <TabsTrigger value="published-week" className="rounded-full border border-border/70 bg-card px-4 py-2">
+              Weekly table
             </TabsTrigger>
-            <TabsTrigger value="team-week" className="rounded-full border border-border/70 bg-card px-4 py-2">
-              Team week
+            <TabsTrigger value="my-week" className="rounded-full border border-border/70 bg-card px-4 py-2">
+              My duties
             </TabsTrigger>
             <TabsTrigger value="settings" className="rounded-full border border-border/70 bg-card px-4 py-2">
               Settings
             </TabsTrigger>
           </TabsList>
 
+          <TabsContent value="published-week" className="space-y-4">
+            <WeeklyScheduleBoard
+              assignments={selectedWeekTeamSchedule}
+              weekStart={selectedWeekStart}
+              emptyLabel="No schedules published"
+              title="Published weekly calendar"
+            />
+          </TabsContent>
+
           <TabsContent value="my-week" className="space-y-4">
             <WeeklyScheduleBoard
-              assignments={mySchedule}
+              assignments={selectedWeekMySchedule}
               weekStart={selectedWeekStart}
               emptyLabel="No duty booked"
               title="My weekly calendar"
@@ -588,11 +606,11 @@ export function DutySchedule() {
               <CardContent>
                 {loading ? (
                   <p className="text-sm text-muted-foreground">Loading...</p>
-                ) : mySchedule.length === 0 ? (
+                ) : selectedWeekMySchedule.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No duties assigned to you yet.</p>
                 ) : (
                   <div className="space-y-3">
-                    {mySchedule.map((assignment) => (
+                    {selectedWeekMySchedule.map((assignment) => (
                       <div
                         key={assignment.id}
                         className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/60 p-4 sm:flex-row sm:items-center sm:justify-between"
@@ -614,15 +632,6 @@ export function DutySchedule() {
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="team-week">
-            <WeeklyScheduleBoard
-              assignments={teamSchedule}
-              weekStart={selectedWeekStart}
-              emptyLabel="No schedules published"
-              title="Team weekly calendar"
-            />
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-4">
