@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addWeeks, format, parseISO, subWeeks } from "date-fns";
 import {
   BellRing,
@@ -151,7 +151,7 @@ export function DutySchedule() {
     () => teamSchedule.filter((assignment) => isAssignmentInWeek(assignment, selectedWeekStart)),
     [selectedWeekStart, teamSchedule],
   );
-  const startAlarmSound = () => {
+  const startAlarmSound = useCallback(() => {
     const AudioCtx = window.AudioContext ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtx) return () => undefined;
 
@@ -167,24 +167,40 @@ export function DutySchedule() {
     };
 
     const emitTone = () => {
+      const startedAt = context.currentTime;
+      const cycleDuration = 2.4;
+      const volume = Math.min(Math.max(alarmSettings.volume / 100, 0.2), 1);
+
       const masterGain = context.createGain();
-      const volume = Math.min(Math.max(alarmSettings.volume / 100, 0.15), 1);
-      masterGain.gain.setValueAtTime(0.0001, context.currentTime);
-      masterGain.gain.exponentialRampToValueAtTime(0.45 * volume, context.currentTime + 0.01);
-      masterGain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.45);
+      masterGain.gain.setValueAtTime(0.0001, startedAt);
+      masterGain.gain.exponentialRampToValueAtTime(0.72 * volume, startedAt + 0.08);
+      masterGain.gain.setValueAtTime(0.72 * volume, startedAt + cycleDuration - 0.18);
+      masterGain.gain.exponentialRampToValueAtTime(0.0001, startedAt + cycleDuration);
       masterGain.connect(context.destination);
 
-      [880, 1320, 1760].forEach((frequency, index) => {
+      const buildSirenOscillator = (
+        type: OscillatorType,
+        baseFrequency: number,
+        peakFrequency: number,
+        detuneCents = 0,
+      ) => {
         const oscillator = context.createOscillator();
-        oscillator.type = index === 1 ? "sawtooth" : "square";
-        oscillator.frequency.value = frequency;
+        oscillator.type = type;
+        oscillator.detune.value = detuneCents;
+        oscillator.frequency.setValueAtTime(baseFrequency, startedAt);
+        oscillator.frequency.linearRampToValueAtTime(peakFrequency, startedAt + 1.15);
+        oscillator.frequency.linearRampToValueAtTime(baseFrequency, startedAt + cycleDuration);
         oscillator.connect(masterGain);
-        oscillator.start();
-        oscillator.stop(context.currentTime + 0.45);
-      });
+        oscillator.start(startedAt);
+        oscillator.stop(startedAt + cycleDuration);
+      };
+
+      buildSirenOscillator("sawtooth", 420, 1480);
+      buildSirenOscillator("square", 415, 1450, -8);
+      buildSirenOscillator("triangle", 840, 1120, 6);
 
       if (alarmSettings.vibrate && "vibrate" in navigator) {
-        navigator.vibrate([450, 150, 450]);
+        navigator.vibrate([900, 180, 900, 180, 500]);
       }
     };
 
@@ -194,7 +210,7 @@ export function DutySchedule() {
     const interval = window.setInterval(() => {
       emitTone();
       triggerVoicePrompt();
-    }, 850);
+    }, 2300);
 
     return () => {
       window.clearInterval(interval);
@@ -206,7 +222,7 @@ export function DutySchedule() {
       }
       void context.close();
     };
-  };
+  }, [alarmSettings.vibrate, alarmSettings.voicePrompt, alarmSettings.volume]);
 
   useEffect(() => {
     setAlarmSettings(readAlarmSettings());
@@ -381,7 +397,7 @@ export function DutySchedule() {
     return () => {
       window.clearInterval(interval);
     };
-  }, [alarmSettings, currentAlarm?.id, mySchedule, notificationPermission]);
+  }, [alarmSettings, currentAlarm?.id, mySchedule, notificationPermission, startAlarmSound]);
 
   useEffect(() => {
     return () => {
